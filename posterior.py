@@ -67,6 +67,9 @@ def draw_data(Rc, Rb, muz, sigmaz, A, mu_noise = np.log(0.01), sigma_noise = 0.1
 
     return data
 
+parameter_labels = [r'$\Lambda_\mathrm{cluster}$', r'$\Lambda_\mathrm{bground}$',
+                    r'$\mu_z$', r'$\sigma_z$', r'$A$']
+
 class Posterior(object):
     """Callable object representing the posterior.
 
@@ -126,6 +129,8 @@ class Posterior(object):
 
         zs = self.zs
         dzs = self.dzs
+
+        
 
         term1 = (A*zmax - 2.0*A*zs + zs)*(sp.erf((zmax - zs)/(np.sqrt(2.0)*dzs)) + sp.erf(zs/(np.sqrt(2.0)*dzs)))/zmax2
 
