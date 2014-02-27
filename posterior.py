@@ -243,3 +243,17 @@ class Posterior(object):
                 print p
                 raise ValueError("ll = NaN")
             return lp + ll
+
+    def log_foreground_probabilities(self, p):
+        p = self.to_params(p)
+
+        Rc = p['Rc']
+        Rb = p['Rb']
+        muz = p['muz']
+        sigmaz = p['sigmaz']
+        A = p['A']
+
+        log_pfore = np.log(Rc) + self.log_convolved_foreground_density(muz, sigmaz)
+        log_pback = np.log(Rb) + self.log_convolved_background_density(A)
+
+        return log_pfore - np.logaddexp(log_pfore, log_pback)
