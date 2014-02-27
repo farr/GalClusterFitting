@@ -2,7 +2,7 @@ import numpy as np
 import scipy.special as sp
 import scipy.stats as ss
 
-def draw_data(Rc, Rb, muz, sigmaz, A, mu_noise = np.log(0.01), sigma_noise = 0.1, zmax=0.1):
+def draw_data(Rc, Rb, muz, sigmaz, A, mu_noise = np.log(0.01), sigma_noise = 0.1, zmin=0.0, zmax=0.1):
     r"""Draws data according to the model.  
 
     The model used is the following:
@@ -45,7 +45,9 @@ def draw_data(Rc, Rb, muz, sigmaz, A, mu_noise = np.log(0.01), sigma_noise = 0.1
     :param sigma_noise: The sigma parameter of the log-normal
       distribution from which the noise sigmas are drawn.
 
-    :param zmax: The maximum redshift
+    :param zmin: The minimum true redshift for the background.
+
+    :param zmax: The maximum true redshift for the background.
 
     """
     Nc = np.random.poisson(Rc)
@@ -55,7 +57,7 @@ def draw_data(Rc, Rb, muz, sigmaz, A, mu_noise = np.log(0.01), sigma_noise = 0.1
     cdzs = np.random.lognormal(mean=mu_noise, sigma=sigma_noise, size=Nc)
 
     us = np.random.uniform(size=Nb)
-    bzs = zmax/(2.0*A-1.0)*(A - np.sqrt(A*A - 2.0*A*us + us))
+    bzs = (A*zmax + (A-1)*zmin - np.sqrt(np.square(zmax-zmin)*(A*A - 2.0*A*us + us)))/(2.0*A - 1.0)
     bdzs = np.random.lognormal(mean=mu_noise, sigma=sigma_noise, size=Nb)
 
     zs = np.concatenate((czs, bzs), axis=0)
@@ -75,7 +77,7 @@ class Posterior(object):
 
     """
     
-    def __init__(self, zs, dzs, zmax=0.1):
+    def __init__(self, zs, dzs, zmin = 0.0, zmax=0.1):
         """Initialize the posterior with the given redshifts and
         uncertainties.
 
@@ -83,6 +85,7 @@ class Posterior(object):
         self._zs = zs
         self._dzs = dzs
         self._zmax = zmax
+        self._zmin = zmin
 
     @property
     def zs(self):
@@ -93,6 +96,11 @@ class Posterior(object):
     def dzs(self):
         """Galaxy redshfit uncertainty."""
         return self._dzs
+
+    @property
+    def zmin(self):
+        """The minimum true redshift of a background galaxy."""
+        return self._zmin
 
     @property
     def zmax(self):
@@ -125,18 +133,26 @@ class Posterior(object):
 
         """
         zmax = self.zmax
-        zmax2 = zmax*zmax
+        zmin = self.zmin
+
+        deltaz = zmax - zmin
+        deltaz2 = deltaz*deltaz
 
         zs = self.zs
         dzs = self.dzs
 
-        
+        dzs2 = dzs*dzs
 
-        term1 = (A*zmax - 2.0*A*zs + zs)*(sp.erf((zmax - zs)/(np.sqrt(2.0)*dzs)) + sp.erf(zs/(np.sqrt(2.0)*dzs)))/zmax2
+        edenoms = 1.0/(np.sqrt(2.0)*dzs)
 
-        term2 = np.sqrt(2.0)*dzs*(2.0*A-1.0)/(np.sqrt(np.pi)*zmax2)*(np.exp(-0.5*np.square(zmax-zs)/np.square(dzs)) - np.exp(-0.5*np.square(zs)/np.square(dzs)))
+        norm = 1.0/(np.sqrt(np.pi)*deltaz2)
 
-        return np.log(term1 + term2)
+        erf_min = sp.erf((zs-zmin)*edenoms)
+        erf_max = sp.erf((zs-zmax)*edenoms)
+
+        den = (-A*np.sqrt(np.pi)*(erf_max-erf_min)*zmax-np.sqrt(np.pi)*(A*erf_max-A*erf_min-erf_max+erf_min)*zmin+np.sqrt(np.pi)*zs*(2*A*erf_max-2*A*erf_min-erf_max+erf_min))/(np.sqrt(np.pi)*(deltaz2))+(-2*A*np.sqrt(2.0)*dzs+np.sqrt(2.0)*dzs)*np.exp(-0.5*np.square(zs - zmin)/dzs2)/(np.sqrt(np.pi)*(deltaz2))+(2*A*np.sqrt(2.0)*dzs-np.sqrt(2.0)*dzs)*np.exp(-0.5*np.square(zs-zmax)/dzs2)/(np.sqrt(np.pi)*(deltaz2))
+
+        return np.log(den)
         
     def log_prior(self, p):
         r"""The log of the prior.  We use quasi-Jeffreys priors on all
@@ -178,7 +194,7 @@ class Posterior(object):
         if A < 0 or A > 1:
             return np.NINF
 
-        if muz - 2.0*sigmaz < 0 or muz + 2.0*sigmaz > self.zmax:
+        if muz - 2.0*sigmaz < self.zmin or muz + 2.0*sigmaz > self.zmax:
             return np.NINF
 
         if np.abs(A-0.5) > 1e-2:
