@@ -1,4 +1,5 @@
 from emcee import EnsembleSampler
+import glob
 from gzip import GzipFile
 import matplotlib.pyplot as pp
 import numpy as np
@@ -6,7 +7,7 @@ import os.path as op
 import posterior as pos
 import scipy.stats as ss
 import triangle as tri
-import utils as u
+import warnings
 
 def true_density(p, z, zmin=0.0, zmax=0.1):
     lc, lb, mu, sigma, A = p
@@ -46,6 +47,8 @@ def data_model_plot(data, sampler, outdir=None, zmin=0.0, zmax=0.1, nzs=1000):
         pp.savefig(op.join(outdir, 'dNdz.pdf'))
 
 def pfore_plot(logpost, sampler, outdir=None, N=10000):
+    pp.figure()
+
     iskip = max(1, int(np.floor(sampler.flatchain.shape[0]/float(N))))
 
     thin_chain = sampler.flatchain[::iskip,:]
@@ -58,7 +61,7 @@ def pfore_plot(logpost, sampler, outdir=None, N=10000):
 
     inds = np.argsort(logpost.zs)
 
-    pp.plot(logpost.zs[inds], np.exp(log_ps)[inds], '.k')
+    pp.errorbar(logpost.zs[inds], np.exp(log_ps)[inds], fmt='.', color='k', xerr=logpost.dzs)
 
     pp.xlabel(r'$z_\mathrm{obs}$')
     pp.ylabel(r'$p(\mathrm{member})$')
@@ -76,8 +79,26 @@ def postprocess(outdir, data, logpost, sampler, zmin=0.0, zmax=0.1):
     with GzipFile(op.join(outdir, 'lnprob.npy.gz'), 'w') as out:
         np.save(out, sampler.lnprobability)
 
-def load_logpost_sampler(outdir, data, zmin=0.0, zmax=0.1):
-    data = u.trim_data(data, zmin=zmin, zmax=zmax)
+def trim_data(data, zmin=0.0, zmax=0.1):
+    r"""Trims the data given so that every data point is within 2-sigma of
+    having :math:`z_\mathrm{min} \leq z \leq z_\mathrm{max}`.
+
+    """
+
+    zs = data[:,0]
+    dzs = data[:,1]
+
+    sel = (zs + 2.0*dzs >= zmin) & (zs - 2.0*dzs <= zmax)
+
+    return data[sel, :]
+
+def load_data_logpost_sampler(outdir, zmin=0.0, zmax=0.1):
+    files = glob.glob(op.join(outdir, 'MZ*'))
+    if len(files) > 1:
+        warnings.warn('more than one input file found; choosing the first')
+    data = np.loadtxt(files[0])
+
+    data = trim_data(data, zmin=zmin, zmax=zmax)
     logpost = pos.Posterior(data[:,0], data[:,1], zmin=zmin, zmax=zmax)
     sampler = EnsembleSampler(100, 5, logpost)
 
@@ -86,4 +107,5 @@ def load_logpost_sampler(outdir, data, zmin=0.0, zmax=0.1):
     with GzipFile(op.join(outdir, 'lnprob.npy.gz'), 'r') as inp:
         sampler._lnprob = np.load(inp)
 
-    return logpost, sampler
+    return data, logpost, sampler
+
