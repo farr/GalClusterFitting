@@ -257,3 +257,84 @@ class Posterior(object):
         log_pback = np.log(Rb) + self.log_convolved_background_density(A)
 
         return log_pfore - np.logaddexp(log_pfore, log_pback)
+
+class TwoComponentPosterior(object):
+    def __init__(self, data):
+        self.data = data
+
+    def to_params(self, p):
+        return np.atleast_1d(p).view(np.dtype([('A', np.float),
+                                               ('mu', np.float, (2, 3)),
+                                               ('cov', np.float, (2, 6))])).squeeze()
+
+    def multivariate_gaussian_logpdf(self, mu, cov, xs):
+        ys = xs - mu
+
+        s, ldet = np.linalg.slogdet(cov)
+
+        chi2 = np.sum(ys*np.linalg.solve(cov, ys.T).T, axis=1)
+
+        return -0.5*xs.shape[1]*np.log(2.0*np.pi) - 0.5*ldet - 0.5*chi2
+
+    def covariance_matrices(self, p):
+        p = self.to_params(p)
+
+        cms = np.zeros((2, 3, 3))
+        iu = np.triu_indices(3)
+
+        for cm, cv in zip(cms, p['cov']):
+            cm[iu] = cv
+            cm += cm.T
+
+        return cms
+
+    def params_from_amps_mus_covs(self, A, mus, covs):
+        sigmas = []
+        for cov in covs:
+            cov = cov.copy()
+            cov.reshape((-1,))[0::4] /= 2.0
+            sigmas.append(cov[np.triu_indices(3)])
+        sigmas = np.array(sigmas)
+
+        return np.concatenate(([A], mus.flatten(), sigmas.flatten()))
+
+    def log_prior(self, p):
+        p = self.to_params(p)
+
+        cms = self.covariance_matrices(p)
+
+        lp = 0.0
+
+        for cm in cms:
+            lambdas = np.linalg.eigvalsh(cm)
+            if np.any(lambdas < 0):
+                return np.NINF
+            else:
+                lp -= 0.5*np.sum(np.log(lambdas))
+
+        if p['A'] > 1 or p['A'] < 0:
+            return np.NINF
+        else:
+            lp -= 0.5*(np.log(p['A']) + np.log1p(-p['A']))
+
+        return lp
+
+    def log_likelihood(self, p):
+        p = self.to_params(p)
+
+        A = p['A']
+        mus = p['mu']
+        cms = self.covariance_matrices(p)
+
+        logl = np.logaddexp(np.log(p['A']) + self.multivariate_gaussian_logpdf(mus[0,:], cms[0,:,:], self.data),
+                            np.log1p(-p['A']) + self.multivariate_gaussian_logpdf(mus[1,:], cms[1,:,:], self.data))
+
+        return np.sum(logl)
+
+    def __call__(self, p):
+        lp = self.log_prior(p)
+
+        if lp == np.NINF:
+            return np.NINF
+        else:
+            return lp + self.log_likelihood(p)
