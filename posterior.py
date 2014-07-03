@@ -72,7 +72,7 @@ def draw_data(Rc, Rb, muz, sigmaz, A, mu_noise = np.log(0.01), sigma_noise = 0.1
 parameter_labels = [r'$\Lambda_\mathrm{cluster}$', r'$\Lambda_\mathrm{bground}$',
                     r'$\mu_z$', r'$\sigma_z$', r'$A$']
 
-class Posterior(object):
+class ZPosterior(object):
     """Callable object representing the posterior.
 
     """
@@ -258,14 +258,28 @@ class Posterior(object):
 
         return log_pfore - np.logaddexp(log_pfore, log_pback)
 
-class TwoComponentPosterior(object):
-    def __init__(self, data):
+class Posterior(object):
+    def __init__(self, data, ncomp):
         self.data = data
+        self.ncomp = ncomp
+        self.ndim = data.shape[1]
+
+    @property
+    def nparams(self):
+        ncomp = self.ncomp
+        ndim = self.ndim
+
+        return ncomp - 1 + ncomp*ndim + ncomp*(ndim+1)*ndim/2
 
     def to_params(self, p):
-        return np.atleast_1d(p).view(np.dtype([('A', np.float),
-                                               ('mu', np.float, (2, 3)),
-                                               ('cov', np.float, (2, 6))])).squeeze()
+        ncomp = self.ncomp
+        ndim = self.ndim
+        
+        p = np.atleast_1d(p)
+
+        return p.view(np.dtype([('A', np.float, ncomp-1),
+                                ('mu', np.float, (ncomp, ndim)),
+                                ('cov', np.float, (ncomp, (ndim+1)*ndim/2))])).squeeze()
 
     def multivariate_gaussian_logpdf(self, mu, cov, xs):
         ys = xs - mu
@@ -277,26 +291,28 @@ class TwoComponentPosterior(object):
         return -0.5*xs.shape[1]*np.log(2.0*np.pi) - 0.5*ldet - 0.5*chi2
 
     def covariance_matrices(self, p):
+        ndim = self.ndim
+        ncomp = self.ncomp
         p = self.to_params(p)
 
-        cms = np.zeros((2, 3, 3))
-        iu = np.triu_indices(3)
+        cms = np.zeros((ncomp, ndim, ndim))
+        iu = np.triu_indices(ndim)
 
         for cm, cv in zip(cms, p['cov']):
             cm[iu] = cv
             cm += cm.T
+            cm.reshape((-1,))[::(ndim+1)] /= 2.0
 
         return cms
 
-    def params_from_amps_mus_covs(self, A, mus, covs):
+    def params_from_amps_mus_covs(self, As, mus, covs):
+        iu = np.triu_indices(self.ndim)
         sigmas = []
         for cov in covs:
-            cov = cov.copy()
-            cov.reshape((-1,))[0::4] /= 2.0
-            sigmas.append(cov[np.triu_indices(3)])
+            sigmas.append(cov[iu])
         sigmas = np.array(sigmas)
 
-        return np.concatenate(([A], mus.flatten(), sigmas.flatten()))
+        return np.concatenate((As[:-1], mus.flatten(), sigmas.flatten()))
 
     def log_prior(self, p):
         p = self.to_params(p)
@@ -305,6 +321,15 @@ class TwoComponentPosterior(object):
 
         lp = 0.0
 
+        if np.any(p['A'] < 0) or np.sum(p['A']) > 1:
+            return np.NINF
+        else:
+            lp -= 0.5*(np.sum(np.log(p['A'])) + np.log1p(-np.sum(p['A'])))
+
+        for mu in p['mu']:
+            if np.any(mu < np.min(self.data, axis=0)) or np.any(mu > np.max(self.data, axis=0)):
+                return np.NINF
+
         for cm in cms:
             lambdas = np.linalg.eigvalsh(cm)
             if np.any(lambdas < 0):
@@ -312,24 +337,28 @@ class TwoComponentPosterior(object):
             else:
                 lp -= 0.5*np.sum(np.log(lambdas))
 
-        if p['A'] > 1 or p['A'] < 0:
-            return np.NINF
-        else:
-            lp -= 0.5*(np.log(p['A']) + np.log1p(-p['A']))
-
         return lp
+
+    def all_As(self, p):
+        p = self.to_params(p)
+
+        return np.concatenate((p['A'], [1.0-np.sum(p['A'])]))
 
     def log_likelihood(self, p):
         p = self.to_params(p)
 
-        A = p['A']
+        As = self.all_As(p)
         mus = p['mu']
         cms = self.covariance_matrices(p)
 
-        logl = np.logaddexp(np.log(p['A']) + self.multivariate_gaussian_logpdf(mus[0,:], cms[0,:,:], self.data),
-                            np.log1p(-p['A']) + self.multivariate_gaussian_logpdf(mus[1,:], cms[1,:,:], self.data))
+        logps = []
+        for A, mu, cm in zip(As, mus, cms):
+            logps.append(np.log(A) + self.multivariate_gaussian_logpdf(mu, cm, self.data))
+        logps = np.array(logps)
 
-        return np.sum(logl)
+        logps = np.logaddexp.reduce(logps, axis=0)
+
+        return np.sum(logps)
 
     def __call__(self, p):
         lp = self.log_prior(p)
@@ -338,3 +367,19 @@ class TwoComponentPosterior(object):
             return np.NINF
         else:
             return lp + self.log_likelihood(p)
+
+    def log_ps(self, p):
+        p = self.to_params(p)
+
+        As = self.all_As(p)
+        mus = p['mu']
+        cms = self.covariance_matrices(p)
+
+        logps = []
+        for A, mu, cm in zip(As, mus, cms):
+            logps.append(np.log(A) + self.multivariate_gaussian_logpdf(mu, cm, self.data))
+        logps = np.array(logps)
+
+        lognorms = np.logaddexp.reduce(logps, axis=0)
+
+        return logps - lognorms
