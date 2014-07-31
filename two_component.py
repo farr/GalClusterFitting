@@ -233,12 +233,29 @@ class TwoComponent(object):
         else:
             return lp + self.log_likelihood(p)
 
-    def pguess(self, p0):
+    def _best_guess(self):
+        p = self.to_params(np.zeros(self.nparams))
+
+        p['A'] = np.float(np.sum(np.abs(self.zs - self.z0) < 2.0*self.dz0))/self.zs.shape[0]
+
+        p['muc'] = self.cmean
+        p['mub'] = self.mean
+
+        p['covc'] = self.cvar[np.triu_indices(3)]
+        p['covb'] = self.var[np.triu_indices(3)]
+
+        return p
+
+    def pguess(self, p0=None):
         """Returns a draw from an approximate posterior assuming that the true
-        parameters are near ``p0``
+        parameters are near ``p0``.  If no ``p0`` is given, then
+        produce a guess at the true parameters.
 
         """
-        p0 = self.to_params(p0)
+        if p0 is None:
+            p0 = self._best_guess()
+        else:
+            p0 = self.to_params(p0)
         pguess = p0.copy()
 
         factor = 7
