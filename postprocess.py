@@ -14,22 +14,25 @@ def triangle_plot(ftchain, logpost, path=None):
     _save_figure(path, 'corner.pdf')
 
 def plot_cluster_size(ftchain, logpost, path=None):
-    pftchain = logpost.to_params(ftchain)
+    sizes = []
+    for p in ftchain:
+        sizes.append(logpost.cluster_size(p))
+    sizes = np.array(sizes)
 
     plt.figure()
-    pu.plot_kde_posterior(np.sqrt(pftchain['covc'][:,0]))
+    pu.plot_kde_posterior(sizes[:,0])
     plt.xlabel(r'$\sigma_\alpha$ (deg)')
     plt.ylabel(r'$p\left(\sigma_\alpha\right)$')
     _save_figure(path, 'ra-size.pdf')
 
     plt.figure()
-    pu.plot_kde_posterior(np.sqrt(pftchain['covc'][:,3]))
+    pu.plot_kde_posterior(sizes[:,1])
     plt.xlabel(r'$\sigma_\delta$ (deg)')
     plt.ylabel(r'$p\left(\sigma_\delta\right)$')
     _save_figure(path, 'dec-size.pdf')
 
     plt.figure()
-    pu.plot_kde_posterior(np.sqrt(pftchain['covc'][:,5])*2.99792e5)
+    pu.plot_kde_posterior(sizes[:,2]*2.99792e5)
     plt.xlabel(r'$\sigma_z$ (km/s)')
     plt.ylabel(r'$p\left( \sigma_z \right)$')
     _save_figure(path, 'z-size.pdf')

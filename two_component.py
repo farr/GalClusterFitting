@@ -370,3 +370,11 @@ class TwoComponent(object):
         log_norm = -0.5*(np.log(2.0*np.pi) + np.linalg.slogdet(cov)[1]) + np.log(N) + np.log(p['A']) - np.log(np.cos(pts[:,1]*np.pi/180.0))
 
         return log_norm - 0.5*np.sum(dxs*np.linalg.solve(cov, dxs.T).T, axis=1)
+
+    def cluster_size(self, p):
+        """Returns the standard deviation, ``[sigma_ra, sigma_dec, sigma_z]``,
+        of the cluster component associated with parameters ``p``.
+
+        """
+        p = self.to_params(p)
+        return np.sqrt(np.diag(upper_tri_to_matrix(p['covc'], 3)))
