@@ -72,7 +72,7 @@ def plot_rho_cluster(ftchain, logpost, path=None):
     pftchain = logpost.to_params(ftchain)
     
     center = np.mean(pftchain['muc'][:,0:2], axis=0)
-    widths = np.sqrt(np.mean(pftchain['covc'][:,[0, 3]], axis=0))
+    widths = np.mean(np.array([logpost.cluster_size(p)[0:2] for p in pftchain]), axis=0)
 
     xs = np.linspace(center[0]-5*widths[0], center[0] + 5*widths[0], 100)
     ys = np.linspace(center[1]-5*widths[1], center[1] + 5*widths[1], 100)

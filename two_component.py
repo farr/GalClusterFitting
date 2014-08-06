@@ -54,18 +54,6 @@ def log_multinormal(x, mu, sigma):
 
     return -0.5*(np.log(2.0*np.pi) + lds) - 0.5*np.sum(dx*np.linalg.solve(sigma, dx), axis=1)
 
-def upper_tri_to_matrix(ut, dim):
-    """Returns the square matrix of dimension ``dim`` that contains ``ut``
-    as its upper triangular elements.
-
-    """
-    m = np.zeros((dim,dim))
-    m[np.triu_indices(dim)] = ut
-    m = m + m.T
-    for i in range(dim):
-        m[i,i] /= 2.0
-    return m
-
 class TwoComponent(object):
     """A posterior object representing a two-component Gaussian mixture
     model for the galaxies in a field containing a group.  The model
@@ -141,6 +129,60 @@ class TwoComponent(object):
         """
         return np.atleast_1d(p).view(self.dtype).squeeze()
 
+    def _cov_matrix(self, x):
+        r"""Returns the 3x3 covariance matrix associated with parameters ``x``.
+        The parameterisation we use is the same as Stan (see
+        http://mc-stan.org/ ).  If :math:`\Sigma` is the covariance
+        matrix, then we have 
+
+        .. math::
+
+          \Sigma = z z^T,
+
+        with :math:`z` lower triangular, derived from a lower
+        triangular matrix :math:`y` whose entries off-diagonal match
+        :math:`z`, but whose diagional entries are the log of those of
+        :math:`z`:
+        
+        .. math::
+
+          \diag(y) = \log(\diag(z))
+
+        The matrix :math:`y` is filled in, in ``np.tril_indices``
+        order from ``x``.
+
+        """
+
+        y = np.zeros((3,3))
+        y[np.tril_indices(3)] = x
+        y.flatten()[::4] = np.exp(y.flatten()[::4])
+
+        return np.dot(y, y.T)
+
+    def _cov_matrix_reverse(self, cm):
+        """Returns the ``x`` such that ``self._cov_matrix(x) == cm``.
+
+        """
+
+        l = np.linalg.cholesky(cm)
+
+        l.flatten()[::4] = np.log(l.flatten()[::4])
+        return l[np.tril_indices(3)]
+
+    def _cov_matrix_log_jac(self, x):
+        """Returns the log of the jacobian factor for the relationship between
+        a density in covariance-matrix space and in ``x``-space for
+        the parameterisation used in ``_cov_matrix`` above.
+
+        """
+
+        y = np.zeros((3,3))
+        y[np.tril_indices(3)] = x
+        log_dy = np.diag(y) # log_dy contains the log of the diagonal elements of z
+        expts = 3 - np.arange(1, 4) + 2
+
+        return np.dot(expts, log_dy)
+
     def log_prior(self, p):
         r"""Returns the log of the prior for the given parameters, ``p``.  
 
@@ -166,8 +208,8 @@ class TwoComponent(object):
 
         p = self.to_params(p)
 
-        covc = upper_tri_to_matrix(p['covc'], 3)
-        covb = upper_tri_to_matrix(p['covb'], 3)
+        covc = self._cov_matrix(p['covc'])
+        covb = self._cov_matrix(p['covb'])
 
         if p['A'] < 0 or p['A'] > 1:
             return np.NINF
@@ -186,6 +228,9 @@ class TwoComponent(object):
         lp += log_inv_wishart(covc, 3, self.cvar)
         lp += log_inv_wishart(covb, 3, self.var)
 
+        lp += self._cov_matrix_log_jac(p['covc'])
+        lp += self._cov_matrix_log_jac(p['covb'])
+
         return lp
 
     def _log_foreground(self, p):
@@ -194,7 +239,7 @@ class TwoComponent(object):
         """
         p = self.to_params(p)
         
-        covc = upper_tri_to_matrix(p['covc'], 3)
+        covc = self._cov_matrix(p['covc'])
         covcs = np.tile(covc, (self.pts.shape[0], 1, 1))
         covcs[:,2,2] += self.dzs*self.dzs
 
@@ -206,7 +251,7 @@ class TwoComponent(object):
         """
         p = self.to_params(p)
 
-        covb = upper_tri_to_matrix(p['covb'], 3)
+        covb = self._cov_matrix(p['covb'])
         covbs = np.tile(covb, (self.pts.shape[0], 1, 1))
         covbs[:,2,2] += self.dzs*self.dzs
 
@@ -241,8 +286,8 @@ class TwoComponent(object):
         p['muc'] = self.cmean
         p['mub'] = self.mean
 
-        p['covc'] = self.cvar[np.triu_indices(3)]
-        p['covb'] = self.var[np.triu_indices(3)]
+        p['covc'] = self._cov_matrix_reverse(self.cvar)
+        p['covb'] = self._cov_matrix_reverse(self.var)
 
         return p
 
@@ -263,8 +308,8 @@ class TwoComponent(object):
 
         N = self.pts.shape[0]
 
-        covc = upper_tri_to_matrix(p0['covc'], 3)
-        covb = upper_tri_to_matrix(p0['covb'], 3)
+        covc = self._cov_matrix(p0['covc'])
+        covb = self._cov_matrix(p0['covb'])
 
         ncl = p0['A']*self.pts.shape[0]
         pguess['A'] = np.random.beta(ncl*factor2+1.0, (N-ncl)*factor2+1.0)
@@ -282,37 +327,14 @@ class TwoComponent(object):
         for i in range(3):
             for j in range(i+1, 3):
                 covc_guess[i,j] = np.random.normal(scale=np.sqrt(covc_guess[i,i]*covc_guess[j,j]/(factor2*N)))
+                covc_guess[j,i] = covc_guess[i,j]
                 covb_guess[i,j] = np.random.normal(scale=np.sqrt(covb_guess[i,i]*covb_guess[j,j]/(factor2*N)))
+                covb_guess[j,i] = covb_guess[i,j]
 
-        pguess['covc'] = covc_guess[np.triu_indices(3)]
-        pguess['covb'] = covb_guess[np.triu_indices(3)]
+        pguess['covc'] = self._cov_matrix_reverse(covc_guess)
+        pguess['covb'] = self._cov_matrix_reverse(covb_guess)
 
         return pguess.reshape((1,)).view(float)
-
-    def draw(self, p):
-        """Returns a draw of synthetic data from the distribution described by
-        parameters ``p``, including observational errors in the
-        redshift described by the stored ``dzs``.
-
-        """
-
-        p = self.to_params(p)
-
-        covc = upper_tri_to_matrix(p['covc'], 3)
-        covb = upper_tri_to_matrix(p['covb'], 3)
-
-        bpts = np.random.multivariate_normal(p['mub'], covb, size=self.pts.shape[0])
-        cpts = np.random.multivariate_normal(p['muc'], covc, size=self.pts.shape[0])
-
-        us = np.random.uniform(low=0, high=1, size=self.pts.shape[0])
-
-        pts = np.zeros((self.pts.shape[0], 3))
-        pts[us<p['A'], :] = cpts[us<p['A'], :]
-        pts[us>=p['A'], :] = bpts[us>=p['A'], :]
-
-        pts[:,2] += np.random.normal(scale=self.dzs)
-
-        return pts
 
     def log_pfore(self, p):
         """Returns the log of the foreground probability for each galaxy
@@ -336,7 +358,7 @@ class TwoComponent(object):
 
         p = self.to_params(p)
 
-        covc = upper_tri_to_matrix(p['covc'], 3)
+        covc = self._cov_matrix(p['covc'])
 
         evals, evecs = np.linalg.eigh(covc[:2,:2])
         evecs = evecs[:, np.argsort(evals)[::-1]]
@@ -363,7 +385,7 @@ class TwoComponent(object):
         N = np.random.gamma(self.pts.shape[0]+0.5)
 
         mu = p['muc'][:2]
-        cov = upper_tri_to_matrix(p['covc'], 3)[:2,:2]
+        cov = self._cov_matrix(p['covc'])[:2,:2]
 
         dxs = pts - mu
 
@@ -377,4 +399,5 @@ class TwoComponent(object):
 
         """
         p = self.to_params(p)
-        return np.sqrt(np.diag(upper_tri_to_matrix(p['covc'], 3)))
+        covc = self._cov_matrix(p['covc'])
+        return np.sqrt(np.diag(covc))
