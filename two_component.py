@@ -32,17 +32,17 @@ def log_multinormal(x, mu, sigma):
     for multiple means and covariances, in which case it will return
     multiple arrays of PDF values.
 
-    :param x: Array of shape ``(M, 3)`` giving the points at which to
-      evaluate the PDF.
+    :param x: Array of shape ``(M, N)`` giving the M points of
+      dimension N at which to evaluate the PDF.
 
-    :param mu: Array of shape ``(3,)`` giving the mean of the
+    :param mu: Array of shape ``(N,)`` giving the mean of the
       distribution.
 
-    :param sigma: Array of shape ``(M, 3, 3)`` giving the coviariances
+    :param sigma: Array of shape ``(M, N, N)`` giving the coviariances
       associated with each point.
 
-    :return: Array of shape ``(M, K)`` giving the values of the ``K``
-      PDFs at the ``M`` points.
+    :return: Array of shape ``(M,)`` giving the values of multivariate
+      normal PDF at the ``M`` points.
 
     """
 
