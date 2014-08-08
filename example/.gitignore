@@ -1,0 +1,4 @@
+*.pkl.bz2
+chain.npy.bz2
+thin.txt
+lnprob.npy.bz2
