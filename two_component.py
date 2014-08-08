@@ -129,6 +129,20 @@ class TwoComponent(object):
         """
         return np.atleast_1d(p).view(self.dtype).squeeze()
 
+    def covariance_matrices(self, p):
+        """Returns ``(cov_cluster, cov_background)``, the covariance matrices
+        of the cluster and background components in the model for the
+        parameters ``p``.
+
+        """
+
+        p = self.to_params(p)
+
+        covc = self._cov_matrix(p['covc'])
+        covb = self._cov_matrix(p['covb'])
+
+        return (covc, covb)
+
     def _cov_matrix(self, x):
         r"""Returns the 3x3 covariance matrix associated with parameters ``x``.
         The parameterisation we use is the same as Stan (see
@@ -401,3 +415,17 @@ class TwoComponent(object):
         p = self.to_params(p)
         covc = self._cov_matrix(p['covc'])
         return np.sqrt(np.diag(covc))
+
+    def ellipticity(self, p):
+        """Returns the ellipticity of the cluster component on the sky for the
+        parameters ``p``.
+
+        """
+
+        p = self.to_params(p)
+
+        ccov = self._cov_matrix(p['covc'])
+
+        evals = np.linalg.eigvalsh(ccov[:2,:2])
+
+        return np.sqrt(np.min(evals)/np.max(evals))

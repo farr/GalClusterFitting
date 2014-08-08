@@ -120,9 +120,23 @@ def plot_membership(ftchain, logpost, path=None):
 
     _save_figure(path, 'pfores-sky.pdf')
 
+def plot_ellipticies(ftchain, logpost, path=None):
+    ells = []
+    for p in ftchain:
+        ells.append(logpost.ellipticity(p))
+    ells = np.array(ells)
+
+    plt.figure()
+    pu.plot_kde_posterior(ells, low=0, high=1)
+    plt.xlabel(r'$e$')
+    plt.ylabel(r'$p(e)$')
+
+    _save_figure(path, 'ellipticity.pdf')
+
 def plot_all(ftchain, logpost, path=None):
     plot_cluster_size(ftchain, logpost, path=path)
     plot_rs(ftchain, logpost, path=path)
     plot_number(ftchain, logpost, path=path)
     plot_rho_cluster(ftchain, logpost, path=path)
     plot_membership(ftchain, logpost, path=path)
+    plot_ellipticies(ftchain, logpost, path=path)
