@@ -61,8 +61,8 @@ class TwoComponent(object):
 
     """
 
-    def __init__(self, zs, dzs, ras, decs, z0, dz0, ra0, dec0):
-        """Initialise the posterior.  
+    def __init__(self, zs, dzs, ras, decs, z0, dz0, ra0, dec0, wishart_nu=7):
+        r"""Initialise the posterior.  
 
         :param zs: The mesaured redshifts.
 
@@ -81,6 +81,14 @@ class TwoComponent(object):
 
         :param dec0: The DEC of the guessed centroid, in decimal degrees.
 
+        :param wishart_nu: The :math:`\nu` parameter of the inverse
+          Wishart distribution that governs the prior on the
+          covariance matrices.  Roughly speaking, the :math:`\nu`
+          parameter corresponds to the number of observations implied
+          by the prior.  This must be at least 4; if smaller than 7,
+          the prior has no second moment, and the posterior may not
+          either.
+
         """
 
         self.zs = zs
@@ -91,6 +99,7 @@ class TwoComponent(object):
         self.dz0 = dz0
         self.ra0 = ra0
         self.dec0 = dec0
+        self.w_nu = wishart_nu
 
         self.pts = np.column_stack((self.ras, self.decs, self.zs))
         self.mean = np.mean(self.pts, axis=0)
@@ -239,8 +248,11 @@ class TwoComponent(object):
         lp += np.sum(ss.norm.logpdf(p['muc'], loc=self.cmean, scale=np.diag(self.csigma)))
         lp += np.sum(ss.norm.logpdf(p['mub'], loc=self.mean, scale=np.diag(self.sigma)))
 
-        lp += log_inv_wishart(covc, 3, self.cvar)
-        lp += log_inv_wishart(covb, 3, self.var)
+        # The prior is chosen to have a mean that is given by cvar
+        # (for the cluster component) and var (for the background
+        # component)
+        lp += log_inv_wishart(covc, self.w_nu, self.cvar/(self.w_nu - 3 - 1))
+        lp += log_inv_wishart(covb, self.w_nu, self.var/(self.w_nu - 3 - 1)
 
         lp += self._cov_matrix_log_jac(p['covc'])
         lp += self._cov_matrix_log_jac(p['covb'])
