@@ -29,6 +29,7 @@ import os.path as op
 import pickle
 import plotutils.runner as pr
 import postprocess as pp
+import scipy.optimize as so
 import two_component as tc
 
 def initialise_runner(args):
@@ -38,7 +39,11 @@ def initialise_runner(args):
     logpost = tc.TwoComponent(galdata['z'], galdata['dz'], galdata['ra'], galdata['dec'], 
                               centroid['z0'], centroid['dz0'], centroid['ra0'], centroid['dec0'])
     sampler = emcee.EnsembleSampler(args.nwalkers, logpost.nparams, logpost)
-    return pr.EnsembleSamplerRunner(sampler, np.array([logpost.pguess() for i in range(args.nwalkers)]))
+
+    p0 = logpost.pguess()
+    pbest = so.fmin_powell((lambda x: -logpost(x)), p0, direc=1e-6*np.eye(logpost.nparams))
+
+    return pr.EnsembleSamplerRunner(sampler, pbest + 1e-6*np.random.randn(args.nwalkers, logpost.nparams))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -65,4 +70,4 @@ if __name__ == '__main__':
 
     runner.run_to_neff(args.neff / args.nwalkers, savedir=args.outdir)
     
-    pp.plot_all(runner.thin_flatchain, runner.sampler.lnprobfn.f, path=args.outdir)
+    pp.plot_all(runner.thin_chain, runner.thin_flatchain, runner.sampler.lnprobfn.f, path=args.outdir)
