@@ -252,7 +252,7 @@ class TwoComponent(object):
         # (for the cluster component) and var (for the background
         # component)
         lp += log_inv_wishart(covc, self.w_nu, self.cvar/(self.w_nu - 3 - 1))
-        lp += log_inv_wishart(covb, self.w_nu, self.var/(self.w_nu - 3 - 1)
+        lp += log_inv_wishart(covb, self.w_nu, self.var/(self.w_nu - 3 - 1))
 
         lp += self._cov_matrix_log_jac(p['covc'])
         lp += self._cov_matrix_log_jac(p['covb'])
