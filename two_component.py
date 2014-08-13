@@ -178,7 +178,7 @@ class TwoComponent(object):
 
         y = np.zeros((3,3))
         y[np.tril_indices(3)] = x
-        y.flatten()[::4] = np.exp(y.flatten()[::4])
+        y.flat[::4] = np.exp(y.flat[::4])
 
         return np.dot(y, y.T)
 
@@ -189,7 +189,7 @@ class TwoComponent(object):
 
         l = np.linalg.cholesky(cm)
 
-        l.flatten()[::4] = np.log(l.flatten()[::4])
+        l.flat[::4] = np.log(l.flat[::4])
         return l[np.tril_indices(3)]
 
     def _cov_matrix_log_jac(self, x):
