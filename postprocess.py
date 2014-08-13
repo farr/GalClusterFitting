@@ -133,10 +133,16 @@ def plot_ellipticies(ftchain, logpost, path=None):
 
     _save_figure(path, 'ellipticity.pdf')
 
-def plot_all(ftchain, logpost, path=None):
+def plot_chain(tchain, path=None):
+    pu.plot_emcee_chains(tchain)
+
+    _save_figure(path, 'chain.pdf')
+
+def plot_all(tchain, ftchain, logpost, path=None):
     plot_cluster_size(ftchain, logpost, path=path)
     plot_rs(ftchain, logpost, path=path)
     plot_number(ftchain, logpost, path=path)
     plot_rho_cluster(ftchain, logpost, path=path)
     plot_membership(ftchain, logpost, path=path)
     plot_ellipticies(ftchain, logpost, path=path)
+    plot_chain(tchain, path=path)
