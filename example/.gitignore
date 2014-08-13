@@ -2,3 +2,6 @@
 chain.npy.bz2
 thin.txt
 lnprob.npy.bz2
+true-params.dat.bz2
+.DS_store
+*.pdf
