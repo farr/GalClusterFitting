@@ -440,4 +440,4 @@ class TwoComponent(object):
 
         evals = np.linalg.eigvalsh(ccov[:2,:2])
 
-        return np.sqrt(np.min(evals)/np.max(evals))
+        return 1.0 - np.sqrt(np.min(evals)/np.max(evals))
