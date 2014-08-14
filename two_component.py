@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.integrate as si
 import scipy.stats as ss
 
 def log_inv_wishart(x, nu, y):
@@ -54,6 +55,25 @@ def log_multinormal(x, mu, sigma):
 
     return -0.5*(np.log(2.0*np.pi) + lds) - 0.5*np.sum(dx*np.linalg.solve(sigma, dx), axis=1)
 
+def da(z):
+    r"""Returns the angular diameter distance in Mpc at redshift ``z``
+    assuming a standard-ish cosmology of :math:`(\Omega_M,
+    \Omega_\Lambda) = (0.3, 0.7)` and :math:`H_0 = 70
+    \mathrm{km}/\mathrm{s}/\mathrm{Mpc}`.
+
+    """
+
+    dh = 4283.0
+    om = 0.3
+    ol = 0.7
+
+    def inve(z):
+        zp1 = 1.0 + z
+        zp13 = zp1*zp1*zp1
+        return 1.0/np.sqrt(om*zp13 + ol)
+
+    return dh*si.romberg(inve, 0, z, vec_func=True)/(1.0+z)
+
 class TwoComponent(object):
     """A posterior object representing a two-component Gaussian mixture
     model for the galaxies in a field containing a group.  The model
@@ -61,7 +81,7 @@ class TwoComponent(object):
 
     """
 
-    def __init__(self, zs, dzs, ras, decs, z0, dz0, ra0, dec0, wishart_nu=7):
+    def __init__(self, zs, dzs, ras, decs, z0, dz0, ra0, dec0, csize=1, wishart_nu=7):
         r"""Initialise the posterior.  
 
         :param zs: The mesaured redshifts.
@@ -81,6 +101,12 @@ class TwoComponent(object):
 
         :param dec0: The DEC of the guessed centroid, in decimal degrees.
 
+        :param csize: A prior on the size of the cluster, in Mpc.
+          Defaults to 1.  Will be converted to angular size using a
+          fiducial cosmology with :math:`(\Omega_M, \Omega_\Lambda) =
+          (0.3, 0.7)` and :math:`H_0 = 70
+          \mathrm{km}/\mathrm{s}/\mathrm{Mpc}`.
+
         :param wishart_nu: The :math:`\nu` parameter of the inverse
           Wishart distribution that governs the prior on the
           covariance matrices.  Roughly speaking, the :math:`\nu`
@@ -99,7 +125,11 @@ class TwoComponent(object):
         self.dz0 = dz0
         self.ra0 = ra0
         self.dec0 = dec0
+        self.csize = csize
         self.w_nu = wishart_nu
+
+        self.ddec = self.csize/da(self.z0)*180.0/np.pi
+        self.dra = self.ddec/np.cos(self.dec0)
 
         self.pts = np.column_stack((self.ras, self.decs, self.zs))
         self.mean = np.mean(self.pts, axis=0)
@@ -107,7 +137,7 @@ class TwoComponent(object):
         self.sigma = np.sqrt(self.var)
         
         self.cmean = np.array([self.ra0, self.dec0, self.z0])
-        self.cvar = np.diag([0.25, 0.25, self.dz0*self.dz0])
+        self.cvar = np.diag([self.dra*self.dra, self.ddec*self.ddec, self.dz0*self.dz0])
         self.csigma = np.sqrt(self.cvar)
 
     @property
