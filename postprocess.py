@@ -112,7 +112,7 @@ def plot_membership(ftchain, logpost, path=None):
     log_pfores = np.logaddexp(log_pfores, np.log(1e-12))
     
     plt.figure()
-    plt.scatter(logpost.ras[sel], logpost.decs[sel], c=np.exp(log_pfores[sel]), s=50, norm=mpl.colors.LogNorm(), alpha=0.5)
+    plt.scatter(logpost.ras, logpost.decs, c=np.exp(log_pfores), s=50, norm=mpl.colors.LogNorm(), alpha=0.5)
     plt.xlabel(r'$\alpha$ (deg)')
     plt.ylabel(r'$\delta$ (deg)')
     plt.title(r'$p(\mathrm{member})$')
