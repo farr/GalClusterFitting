@@ -17,7 +17,7 @@ def log_inv_wishart(x, nu, y):
 
     ..math::
 
-    \mathcal{W}(x, \nu, y) = \frac{\left| y \right|^{\nu/2}}{2^{\nu n/2} \Gamma_n\left( \frac{\nu}{2}\right)} |x|^{-\frac{\nu + n + 1}{2}} \exp\left[ -\frac{1}{2} \tr \left( y x^{-1} \right) \right]
+      \mathcal{W}(x, \nu, y) = \frac{\left| y \right|^{\nu/2}}{2^{\nu n/2} \Gamma_n\left( \frac{\nu}{2}\right)} |x|^{-\frac{\nu + n + 1}{2}} \exp\left[ -\frac{1}{2} \tr \left( y x^{-1} \right) \right]
 
     """
     s, ldx = np.linalg.slogdet(x)
@@ -28,16 +28,15 @@ def log_inv_wishart(x, nu, y):
     return nu/2.0*ldy - (nu + x.shape[0]+1)/2.0*ldx - 0.5*tr_prod
 
 def log_multinormal(x, mu, sigma):
-    """Returns the value of the multivariate normal PDF with mean(s)
-    ``mu`` and covariance(s) ``sigma`` at the points ``x``.  Allows
-    for multiple means and covariances, in which case it will return
-    multiple arrays of PDF values.
+    """Returns the value of the multivariate normal PDF with mean ``mu``
+    and covariances---associated with each point in ``x``---``sigma``
+    at the points ``x``.
 
     :param x: Array of shape ``(M, N)`` giving the M points of
       dimension N at which to evaluate the PDF.
 
-    :param mu: Array of shape ``(N,)`` giving the mean of the
-      distribution.
+    :param mu: Array of shape ``(N,)`` giving the mean
+      of the distribution.
 
     :param sigma: Array of shape ``(M, N, N)`` giving the coviariances
       associated with each point.
@@ -151,16 +150,6 @@ class TwoComponent(object):
                          ('mub', np.float, 3),
                          ('covc', np.float, 6),
                          ('covb', np.float, 6)])
-
-    @property
-    def pnames(self):
-        return [r'$A$', 
-                r'$\mu_c^\alpha$', r'$\mu_c^\delta$', r'$\mu_c^z$',
-                r'$\mu_b^\alpha$', r'$\mu_b^\delta$', r'$\mu_b^z$',
-                r'\Sigma_c^{\alpha \alpha}$', r'$\Sigma_c^{\alpha\delta}$', r'$\Sigma_c^{\alpha z}$',
-                r'$\Sigma_c^{\delta \delta}$', r'$\Sigma_c^{\delta z}$', r'$\Sigma_c^{z z}$',
-                r'\Sigma_b^{\alpha \alpha}$', r'$\Sigma_b^{\alpha\delta}$', r'$\Sigma_b^{\alpha z}$',
-                r'$\Sigma_b^{\delta \delta}$', r'$\Sigma_b^{\delta z}$', r'$\Sigma_b^{z z}$']
 
     def to_params(self, p):
         """Returns a named view of the array ``p`` using the params dtype.
@@ -471,3 +460,37 @@ class TwoComponent(object):
         evals = np.linalg.eigvalsh(ccov[:2,:2])
 
         return 1.0 - np.sqrt(np.min(evals)/np.max(evals))
+
+    def virial_density(self, p):
+        r"""Returns the virial density, defined as the density, in units of
+        2.5e39 kg / Mpc^3 (Milky-Way equivalent per Mpc^3) at which
+        the system as measured would be virialised: 
+
+        .. math::
+
+          T = \frac{1}{2} \sigma^2 = \frac{1}{2} V = \frac{G \rho r^2}{2},
+
+        where :math:`\sigma` is the velocity dispersion and 
+
+        .. math::
+
+          r \equiv D_A(z) \sqrt{\sigma_\delta^2 + \cos^2\delta \sigma_\alpha^2}
+
+        is the effective radius on the sky of the cluster.
+
+        """
+
+        p = self.to_params(p)
+
+        ccov = self._cov_matrix(p['covc'])
+        muc = p['muc']
+
+        ra, dec, z = muc
+
+        cdec = np.cos(np.pi*dec/180.0)
+
+        r = da(z)*np.sqrt(ccov[1,1] + cdec*cdec*ccov[0,0])
+
+        sigma = 2.99792e5*np.sqrt(ccov[2,2])
+
+        return 0.185*np.square(sigma/r)

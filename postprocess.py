@@ -138,6 +138,17 @@ def plot_chain(tchain, path=None):
 
     _save_figure(path, 'chain.pdf')
 
+def plot_density(ftchain, logpost, path=None):
+    rhos = []
+    for p in ftchain:
+        rhos.append(logpost.virial_density(p))
+    rhos = np.array(rhos)
+    pu.plot_kde_posterior(rhos, low=0)
+    plt.xlabel(r'$\rho$ ($\mathrm{MWEG} / \mathrm{Mpc}^3$)')
+    plt.ylabel(r'$p\left(\rho\right)$')
+    
+    _save_figure(path, 'density.pdf')
+
 def plot_all(tchain, ftchain, logpost, path=None):
     plot_cluster_size(ftchain, logpost, path=path)
     plot_rs(ftchain, logpost, path=path)
@@ -146,3 +157,4 @@ def plot_all(tchain, ftchain, logpost, path=None):
     plot_membership(ftchain, logpost, path=path)
     plot_ellipticies(ftchain, logpost, path=path)
     plot_chain(tchain, path=path)
+    plot_density(ftchain, path=path)
