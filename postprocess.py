@@ -157,4 +157,4 @@ def plot_all(tchain, ftchain, logpost, path=None):
     plot_membership(ftchain, logpost, path=path)
     plot_ellipticies(ftchain, logpost, path=path)
     plot_chain(tchain, path=path)
-    plot_density(ftchain, path=path)
+    plot_density(ftchain, logpost, path=path)
